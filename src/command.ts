@@ -19,7 +19,9 @@ import { Photo, Tweet } from './tweets';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import dotenv from 'dotenv';  
+import dotenv from 'dotenv';
+import { MultiAccountManager } from './multi-account-manager';
+import { TwitterAccount } from './types/account';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -33,6 +35,31 @@ const rl = readline.createInterface({
   output: process.stdout,
   prompt: '> '
 });
+
+// Add this after the existing imports
+const accounts: TwitterAccount[] = [
+  {
+    username: process.env.TWITTER_USERNAME_1!,
+    password: process.env.TWITTER_PASSWORD_1!,
+    email: process.env.TWITTER_EMAIL_1,
+    apiKey: process.env.TWITTER_API_KEY_1,
+    apiSecretKey: process.env.TWITTER_API_SECRET_KEY_1,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN_1,
+    accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET_1,
+  },
+  {
+    username: process.env.TWITTER_USERNAME_2!,
+    password: process.env.TWITTER_PASSWORD_2!,
+    email: process.env.TWITTER_EMAIL_2,
+    apiKey: process.env.TWITTER_API_KEY_2,
+    apiSecretKey: process.env.TWITTER_API_SECRET_KEY_2,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN_2,
+    accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET_2,
+  },
+  // Add more accounts as needed
+].filter(account => account.username && account.password); // Only include accounts with credentials
+
+const accountManager = new MultiAccountManager(accounts);
 
 // Function to log in and save cookies
 async function loginAndSaveCookies() {
@@ -71,11 +98,9 @@ async function loadCookies() {
 
     // Map cookies to the correct format (strings)
     const cookieStrings = cookiesArray.map((cookie: any) => {
-      return `${cookie.key}=${cookie.value}; Domain=${cookie.domain}; Path=${cookie.path}; ${
-        cookie.secure ? 'Secure' : ''
-      }; ${cookie.httpOnly ? 'HttpOnly' : ''}; SameSite=${
-        cookie.sameSite || 'Lax'
-      }`;
+      return `${cookie.key}=${cookie.value}; Domain=${cookie.domain}; Path=${cookie.path}; ${cookie.secure ? 'Secure' : ''
+        }; ${cookie.httpOnly ? 'HttpOnly' : ''}; SameSite=${cookie.sameSite || 'Lax'
+        }`;
     });
 
     // Set the cookies for the current session
@@ -255,10 +280,7 @@ function parseCommandLine(commandLine: string): string[] {
 
 // Function to execute commands
 async function executeCommand(commandLine: string) {
-  const args = parseCommandLine(commandLine);
-  const command = args.shift(); // Remove and get the first element as command
-
-  if (!command) return;
+  const [command, ...args] = commandLine.trim().split(' ');
 
   switch (command) {
     case 'login':
@@ -397,6 +419,8 @@ async function executeCommand(commandLine: string) {
       console.log('  like <tweetId>            - Like a tweet by its ID');
       console.log('  retweet <tweetId>         - Retweet a tweet by its ID');
       console.log('  follow <username>         - Follow a user by their username');
+      console.log('  init-accounts             - Initialize all configured Twitter accounts');
+      console.log('  multi-engage <tweetId>    - Like and retweet a tweet with all configured accounts');
       break;
 
     case 'exit':
@@ -483,6 +507,29 @@ async function executeCommand(commandLine: string) {
         } catch (error) {
           console.error('Error following user:', error);
         }
+      }
+      break;
+
+    case 'init-accounts':
+      try {
+        await accountManager.initialize();
+        console.log('All accounts initialized successfully');
+      } catch (error) {
+        console.error('Error initializing accounts:', error);
+      }
+      break;
+
+    case 'multi-engage':
+      const tweetId = args[0];
+      if (!tweetId) {
+        console.log('Please provide a tweet ID.');
+        break;
+      }
+      try {
+        await accountManager.performActions(tweetId);
+        console.log('Completed actions for all accounts');
+      } catch (error) {
+        console.error('Error performing multi-account actions:', error);
       }
       break;
 
